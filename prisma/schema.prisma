@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Token {
+  BRL
+  BTC
+  ETH
+  USDT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
+enum TransactionType {
+  DEPOSIT
+  SWAP
+  WITHDRAWAL
+}
+
+enum LedgerEntryType {
+  DEPOSIT
+  SWAP_IN
+  SWAP_OUT
+  SWAP_FEE
+  WITHDRAWAL
+}
+
+model User {
+  id              String           @id @default(uuid())
+  email           String           @unique
+  passwordHash    String
+  status          UserStatus       @default(ACTIVE)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  wallet          Wallet?
+  refreshTokens   RefreshToken[]
+  webhookDeposits WebhookDeposit[]
+}
+
+model Wallet {
+  id            String          @id @default(uuid())
+  userId        String          @unique
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balances      WalletBalance[]
+  transactions  Transaction[]
+  ledgerEntries LedgerEntry[]
+
+  @@index([createdAt])
+}
+
+model WalletBalance {
+  id        String   @id @default(uuid())
+  walletId  String
+  token     Token
+  balance   Decimal  @default(0) @db.Decimal(28, 8)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  wallet    Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@unique([walletId, token])
+  @@index([walletId])
+  @@index([createdAt])
+}
+
+model Transaction {
+  id            String          @id @default(uuid())
+  walletId      String
+  type          TransactionType
+  fromToken     Token?
+  toToken       Token?
+  fromAmount    Decimal?        @db.Decimal(28, 8)
+  toAmount      Decimal?        @db.Decimal(28, 8)
+  feeToken      Token?
+  feeAmount     Decimal?        @db.Decimal(28, 8)
+  createdAt     DateTime        @default(now())
+  wallet        Wallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  ledgerEntries LedgerEntry[]
+
+  @@index([walletId])
+  @@index([createdAt])
+}
+
+model LedgerEntry {
+  id            String          @id @default(uuid())
+  walletId      String
+  transactionId String?
+  type          LedgerEntryType
+  token         Token
+  amount        Decimal         @db.Decimal(28, 8)
+  balanceBefore Decimal         @db.Decimal(28, 8)
+  balanceAfter  Decimal         @db.Decimal(28, 8)
+  createdAt     DateTime        @default(now())
+  wallet        Wallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  transaction   Transaction?    @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@index([walletId])
+  @@index([transactionId])
+  @@index([createdAt])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model WebhookDeposit {
+  id             String    @id @default(uuid())
+  idempotencyKey String    @unique
+  userId         String
+  token          Token
+  amount         Decimal   @db.Decimal(28, 8)
+  processedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
