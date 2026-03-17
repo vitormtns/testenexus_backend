@@ -24,7 +24,7 @@ O projeto está publicado no Railway e pode ser testado diretamente, sem necessi
 - Base URL pública: `https://testenexusbackend-production.up.railway.app`
 - Health check: `GET https://testenexusbackend-production.up.railway.app/health`
 
-Isso permite que avaliadores validem rapidamente o comportamento da API, os fluxos principais e a consistência das respostas já em ambiente online.
+Isso permite validar rapidamente o comportamento da API, os fluxos principais e a consistência das respostas já em ambiente online.
 
 ## Funcionalidades
 
@@ -444,7 +444,7 @@ Descrição resumida:
 - cache Redis com `TTL` e fallback seguro
 - modelagem separando transação de negócio e lançamento contábil
 
-## 📈 Performance
+## Performance
 
 Durante os testes, requisições repetidas de cotação dentro da janela de `TTL` foram atendidas com latência muito menor via Redis, enquanto requisições sem cache dependeram diretamente do tempo de resposta da CoinGecko.
 
