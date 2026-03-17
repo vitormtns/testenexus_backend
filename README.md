@@ -1,162 +1,182 @@
-# Crypto Wallet API
+# Nexus Backend Challenge - Crypto Wallet API
 
-API REST para gerenciamento de uma carteira cripto multiativo.
+API REST que simula o núcleo de uma carteira cripto com características comuns de um sistema financeiro real: autenticação segura, gestão de saldos multiativos, movimentações financeiras, integração externa para cotação de ativos e trilha contábil auditável via ledger.
 
-A aplicação implementa autenticação JWT, gestão de saldos, depósitos via webhook com idempotência, execução de swaps com cotação real da CoinGecko, saques mockados, ledger auditável de movimentações financeiras e histórico paginado de transações.
-
----
+O projeto foi construído em `Node.js + TypeScript`, utilizando `Fastify`, `PostgreSQL`, `Prisma`, `Zod`, `JWT` e integração com a `CoinGecko`, além de cache em `Redis` para otimizar a consulta de preços.
 
 ## Visão geral
 
-Esta API implementa:
+Esta API cobre o fluxo principal de uma wallet cripto com foco em consistência, rastreabilidade e clareza arquitetural:
 
-- autenticação com JWT
-- wallet multiativos com saldos em `BRL`, `BTC`, `ETH` e `USDT`
-- depósito via webhook com idempotência
-- cotação de swap com valor real via CoinGecko
+- cadastro e autenticação com `access token` e `refresh token`
+- criação automática da wallet no signup
+- saldos materializados por ativo
+- depósitos via webhook com idempotência
+- cotação e execução de swap entre ativos
+- saques
+- ledger detalhado para auditoria de movimentações
+- histórico transacional com paginação
+
+## API pública / deploy
+
+O projeto está publicado no Railway e pode ser testado diretamente, sem necessidade de clonar o repositório primeiro.
+
+- Base URL pública: `https://testenexusbackend-production.up.railway.app`
+- Health check: `GET https://testenexusbackend-production.up.railway.app/health`
+
+Isso permite que avaliadores validem rapidamente o comportamento da API, os fluxos principais e a consistência das respostas já em ambiente online.
+
+## Funcionalidades
+
+- autenticação com `JWT access token` e `refresh token`
+- persistência de `refresh tokens` com hash no banco
+- criação automática de wallet ao registrar um novo usuário
+- suporte aos ativos `BRL`, `BTC`, `ETH` e `USDT`
+- consulta de saldo da wallet autenticada
+- depósito via webhook com proteção por `idempotencyKey`
+- cotação de swap com preço real via CoinGecko
 - execução de swap com taxa fixa de `1.5%`
-- saque mockado
-- ledger auditável
+- saque autenticado com baixa de saldo
+- ledger com `balanceBefore` e `balanceAfter`
 - histórico de transações com paginação
+- cache de cotações em Redis com `TTL` e fallback seguro
 
----
+## Stack técnica
 
-## Stack utilizada
+- `Node.js`
+- `TypeScript`
+- `Fastify`
+- `PostgreSQL`
+- `Prisma ORM`
+- `Zod`
+- `@fastify/jwt`
+- `Redis`
+- `CoinGecko API`
+- `Git`
 
-- Node.js
-- TypeScript
-- Fastify
-- PostgreSQL
-- Prisma ORM
-- Zod
-- JWT
-- CoinGecko API
+## Decisões técnicas
 
----
+### Fastify
 
-## Como rodar o projeto localmente
+Escolha por um framework enxuto, performático e adequado para APIs REST, com boa ergonomia para middlewares, plugins e tratamento centralizado de erros.
 
-### 1. Pré-requisitos
+### Prisma + PostgreSQL
 
-Você precisa ter instalado:
+Prisma foi usado para modelagem tipada, migrations e transações de banco, enquanto PostgreSQL sustenta a consistência das operações financeiras e o histórico persistente.
 
-- Node.js
-- npm
-- Docker Desktop **ou** PostgreSQL local
+### Zod na borda da aplicação
 
----
+Todos os payloads principais são validados com Zod, reduzindo ambiguidade de entrada e garantindo contratos mais previsíveis para quem consome a API.
 
-### 2. Instalar dependências
+### Separação entre saldo materializado e ledger
 
-```bash
-npm install
-```
+O projeto mantém leitura rápida do saldo atual em `wallet_balances`, sem abrir mão da auditabilidade completa em `ledger_entries`.
 
-### 3. Configurar o `.env`
+### Transações atômicas
 
-Copie o arquivo de exemplo:
+Fluxos críticos como registro inicial, depósito, swap e saque utilizam `prisma.$transaction`, garantindo consistência entre saldo, transação de negócio, ledger e controle de idempotência.
 
-Mac/Linux
+## Banco de dados e modelo de ledger
 
-```bash
-cp .env.example .env
-```
+O desenho do banco separa claramente duas visões complementares:
 
-Windows
+- `wallet_balances`: estado atual da wallet por token, otimizado para leitura rápida
+- `ledger_entries`: trilha auditável de todas as movimentações que alteram saldo
 
-```bash
-copy .env.example .env
-```
+Também existe uma separação intencional entre:
 
-Exemplo de configuração:
+- `transactions`: operação de negócio em alto nível, como `DEPOSIT`, `SWAP` e `WITHDRAWAL`
+- `ledger_entries`: efeitos contábeis detalhados da operação, como `SWAP_OUT`, `SWAP_IN`, `SWAP_FEE` e `WITHDRAWAL`
 
-```env
-PORT=3333
-NODE_ENV=development
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/crypto_wallet?schema=public"
-JWT_ACCESS_SECRET="change-me-access"
-JWT_REFRESH_SECRET="change-me-refresh"
-JWT_ACCESS_EXPIRES_IN="15m"
-JWT_REFRESH_EXPIRES_IN="7d"
-COINGECKO_API_URL="https://api.coingecko.com/api/v3"
-```
+Esse modelo melhora rastreabilidade, depuração e reconstituição de histórico financeiro. Cada entrada do ledger registra:
 
-### 4. Subir o banco com Docker
+- ativo movimentado
+- valor da movimentação
+- saldo antes
+- saldo depois
+- vínculo opcional com a transação de negócio
+- timestamp da operação
 
-Forma mais simples para rodar o PostgreSQL localmente:
+## Diferencial: cache Redis para cotações
 
-```bash
-docker run --name crypto-wallet-postgres -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=crypto_wallet -p 5432:5432 -d postgres:16
-```
+As cotações consultadas na CoinGecko são normalizadas em BRL e armazenadas em uma única chave de cache no Redis, com `TTL de 60 segundos`.
 
-Se preferir usar PostgreSQL local já instalado, basta ajustar a `DATABASE_URL` no `.env`.
+Benefícios da abordagem:
 
-### 5. Rodar migrations
+- reduz chamadas repetidas à API externa
+- melhora significativamente a latência do endpoint de quote em cache hit, com testes mostrando queda de cerca de `~100-250ms` para `~2-5ms` em chamadas repetidas dentro do TTL
+- mantém o sistema funcionando mesmo se o Redis estiver indisponível
 
-```bash
-npm run prisma:migrate -- --name init
-```
+O Redis é tratado como otimização, não como dependência crítica. Se o Redis falhar, a aplicação segue operando com consulta direta à CoinGecko. Se a CoinGecko falhar, a API responde com erro controlado.
 
-### 6. Rodar a API
+## Como testar a API
+
+Você pode testar diretamente na URL pública publicada no Railway:
 
 ```bash
-npm run dev
+curl https://testenexusbackend-production.up.railway.app/health
 ```
 
-Por padrão, a API sobe em:
+## ⚡ Quick Test (2 minutos)
 
-```text
-http://localhost:3333
-```
+Fluxo mais rápido para avaliação:
 
-### 7. Health check
+1. Registrar usuário
+2. Fazer login
+3. Simular depósito
+4. Gerar cotação de swap
+5. Executar swap
+6. Consultar saldo da wallet
 
-Valide se a aplicação subiu corretamente:
+Esse fluxo valida autenticação, comportamento do ledger, integração com API externa e consistência dos saldos após movimentações.
+
+Fluxo recomendado de validação:
+
+1. Registrar um usuário
+2. Fazer login e obter `accessToken` e `refreshToken`
+3. Consultar saldos da wallet criada automaticamente
+4. Simular um depósito via webhook
+5. Gerar uma cotação de swap
+6. Executar o swap autenticado
+7. Criar um saque
+8. Consultar ledger e histórico transacional paginado
+
+Para endpoints protegidos, use:
 
 ```http
-GET http://localhost:3333/health
+Authorization: Bearer <accessToken>
 ```
 
-Exemplo:
+## Endpoints principais
+
+### `GET /health`
+
+Verifica disponibilidade da API.
 
 ```bash
-curl http://localhost:3333/health
+curl https://testenexusbackend-production.up.railway.app/health
 ```
 
 Resposta esperada:
 
-```json
-{
-  "status": "ok"
-}
+```
+{"status":"ok"}
 ```
 
-## Ordem recomendada para testar a API
+### `POST /auth/register`
 
-Base URL usada nos exemplos:
+Cria um usuário e provisiona automaticamente uma wallet com saldo inicial zerado para `BRL`, `BTC`, `ETH` e `USDT`.
 
-```text
-http://localhost:3333
+```bash
+curl -X POST https://testenexusbackend-production.up.railway.app/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "avaliador@example.com",
+    "password": "strongpass123"
+  }'
 ```
 
-### 1. `POST /auth/register`
-
-Cria o usuário e já provisiona a wallet com saldo inicial zerado para `BRL`, `BTC`, `ETH` e `USDT`.
-
-`Authorization`: não precisa
-
-```json
-{
-  "email": "avaliador@example.com",
-  "password": "strongpass123"
-}
-```
-
-### 2. `POST /auth/login`
-
-Autentica o usuário e retorna `accessToken` e `refreshToken`.
-
-`Authorization`: não precisa
+Payload:
 
 ```json
 {
@@ -165,52 +185,79 @@ Autentica o usuário e retorna `accessToken` e `refreshToken`.
 }
 ```
 
-Use o `accessToken` retornado nos endpoints protegidos:
+### `POST /auth/login`
 
-```text
-Authorization: Bearer <accessToken>
+Autentica o usuário e retorna `accessToken`, `refreshToken` e dados básicos da conta.
+
+```bash
+curl -X POST https://testenexusbackend-production.up.railway.app/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "avaliador@example.com",
+    "password": "strongpass123"
+  }'
 ```
 
-### 3. `GET /auth/me`
-
-Retorna os dados do usuário autenticado.
-
-`Authorization`: obrigatória
-
-### 4. `GET /wallet/balances`
-
-Lista os saldos atuais da wallet do usuário autenticado.
-
-`Authorization`: obrigatória
-
-### 5. `POST /webhooks/deposit`
-
-Simula a entrada de saldo via webhook. Esse endpoint usa `idempotencyKey` para impedir processamento duplicado.
-
-`Authorization`: não precisa
-
-Importante: use o `user.id` retornado em `/auth/register` ou `/auth/login`.
+Payload:
 
 ```json
 {
-  "userId": "uuid-do-usuario",
+  "email": "avaliador@example.com",
+  "password": "strongpass123"
+}
+```
+
+### `POST /auth/refresh`
+
+Gera um novo `accessToken` a partir de um `refreshToken` válido.
+
+```json
+{
+  "refreshToken": "SEU_REFRESH_TOKEN"
+}
+```
+
+### `POST /webhooks/deposit`
+
+Simula um evento externo de depósito com proteção por idempotência.
+
+```bash
+curl -X POST https://testenexusbackend-production.up.railway.app/webhooks/deposit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "USER_ID_HERE",
+    "token": "BTC",
+    "amount": 0.5,
+    "idempotencyKey": "deposit-btc-0001"
+  }'
+```
+
+Payload:
+
+```json
+{
+  "userId": "USER_ID_HERE",
   "token": "BTC",
   "amount": 0.5,
   "idempotencyKey": "deposit-btc-0001"
 }
 ```
 
-### 6. `GET /wallet/balances`
+### `POST /swap/quote`
 
-Consulte novamente os saldos para confirmar o depósito.
+Consulta cotação entre dois ativos com taxa fixa de `1.5%` já calculada no retorno.
 
-`Authorization`: obrigatória
+```bash
+curl -X POST https://testenexusbackend-production.up.railway.app/swap/quote \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fromToken": "BTC",
+    "toToken": "USDT",
+    "amount": 0.1
+  }'
+```
 
-### 7. `POST /swap/quote`
-
-Gera uma cotação de swap com valor real via CoinGecko e taxa fixa de `1.5%`.
-
-`Authorization`: não precisa
+Payload:
 
 ```json
 {
@@ -220,11 +267,22 @@ Gera uma cotação de swap com valor real via CoinGecko e taxa fixa de `1.5%`.
 }
 ```
 
-### 8. `POST /swap/execute`
+### `POST /swap/execute`
 
-Executa o swap na wallet do usuário autenticado, atualiza os saldos e registra `transaction` + `ledger`.
+Executa o swap na wallet autenticada, atualiza saldos, cria a transação de negócio e registra os lançamentos de ledger correspondentes.
 
-`Authorization`: obrigatória
+```bash
+curl -X POST https://testenexusbackend-production.up.railway.app/swap/execute \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+  -d '{
+    "fromToken": "BTC",
+    "toToken": "USDT",
+    "amount": 0.1
+  }'
+```
+
+Payload:
 
 ```json
 {
@@ -234,11 +292,21 @@ Executa o swap na wallet do usuário autenticado, atualiza os saldos e registra 
 }
 ```
 
-### 9. `POST /withdrawals`
+### `POST /withdrawals`
 
-Cria um saque mockado, debitando o saldo e registrando a movimentação.
+Cria um saque autenticado e debita o saldo do ativo informado.
 
-`Authorization`: obrigatória
+```bash
+curl -X POST https://testenexusbackend-production.up.railway.app/withdrawals \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ACCESS_TOKEN_HERE" \
+  -d '{
+    "token": "USDT",
+    "amount": 50
+  }'
+```
+
+Payload:
 
 ```json
 {
@@ -247,205 +315,143 @@ Cria um saque mockado, debitando o saldo e registrando a movimentação.
 }
 ```
 
-### 10. `GET /ledger`
+### `GET /wallet/balances`
 
-Consulta o ledger auditável com as movimentações detalhadas de saldo.
+Consulta os saldos atuais da wallet autenticada.
 
-`Authorization`: obrigatória
-
-Exemplo com paginação:
-
-```http
-GET /ledger?page=1&limit=10
+```bash
+curl https://testenexusbackend-production.up.railway.app/wallet/balances \
+  -H "Authorization: Bearer ACCESS_TOKEN_HERE"
 ```
 
-### 11. `GET /transactions`
+### `GET /ledger`
 
-Consulta o histórico de operações de negócio da wallet.
+Consulta o extrato auditável do ledger com paginação.
 
-`Authorization`: obrigatória
-
-Exemplo com paginação:
-
-```http
-GET /transactions?page=1&limit=10
+```bash
+curl "https://testenexusbackend-production.up.railway.app/ledger?page=1&limit=10" \
+  -H "Authorization: Bearer ACCESS_TOKEN_HERE"
 ```
 
-## Endpoints implementados
+### `GET /transactions`
 
-### Auth
+Consulta o histórico de transações de negócio com paginação.
 
-- `POST /auth/register`
-- `POST /auth/login`
-- `POST /auth/refresh`
-- `GET /auth/me`
+```bash
+curl "https://testenexusbackend-production.up.railway.app/transactions?page=1&limit=10" \
+  -H "Authorization: Bearer ACCESS_TOKEN_HERE"
+```
 
-### Wallet
+## Setup local
 
-- `GET /wallet/balances`
+### Pré-requisitos
 
-### Webhooks
+- `Node.js`
+- `npm`
+- `PostgreSQL`
+- `Redis` opcional, caso queira habilitar cache local de cotações
 
-- `POST /webhooks/deposit`
+### Instalação
 
-### Swap
+```bash
+git clone https://github.com/vitormtns/testenexus_backend
+cd PASTA_DO_REPO
+npm install
+```
 
-- `POST /swap/quote`
-- `POST /swap/execute`
+### Configuração do ambiente
 
-### Withdrawals
+```bash
+cp .env.example .env
+```
 
-- `POST /withdrawals`
+No Windows:
 
-### Ledger
+```powershell
+copy .env.example .env
+```
 
-- `GET /ledger`
+### Subida do banco
 
-### Transactions
+Você pode usar PostgreSQL local ou container Docker. Exemplo com Docker:
 
-- `GET /transactions`
+```bash
+docker run --name crypto-wallet-postgres \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=crypto_wallet \
+  -p 5432:5432 \
+  -d postgres:16
+```
 
-## Paginação
+### Migrations
 
-Os endpoints abaixo suportam paginação via query params `page` e `limit`:
+```bash
+npm run prisma:migrate -- --name init
+```
 
-- `GET /ledger`
-- `GET /transactions`
+### Executar em desenvolvimento
 
-Exemplos:
+```bash
+npm run dev
+```
+
+API local padrão:
 
 ```text
-/ledger?page=1&limit=10
-/transactions?page=1&limit=10
+http://localhost:3333
 ```
 
-Se nada for informado, o padrão atual é:
+## Variáveis de ambiente
 
-- `page = 1`
-- `limit = 10`
+Exemplo de configuração:
 
-## Decisões técnicas relevantes
+```env
+PORT=3333
+NODE_ENV=development
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/crypto_wallet?schema=public"
+REDIS_URL="redis://localhost:6379"
+JWT_ACCESS_SECRET="change-me-access"
+JWT_REFRESH_SECRET="change-me-refresh"
+JWT_ACCESS_EXPIRES_IN="15m"
+JWT_REFRESH_EXPIRES_IN="7d"
+COINGECKO_API_URL="https://api.coingecko.com/api/v3"
+```
 
-### Fastify
+Descrição resumida:
 
-Optei por usar Fastify por ser um framework leve, rápido e alinhado com as preferências sinalizadas no teste. Ele oferece uma estrutura enxuta e adequada para uma API REST desse porte.
+- `PORT`: porta HTTP da aplicação
+- `NODE_ENV`: ambiente de execução
+- `DATABASE_URL`: conexão com PostgreSQL
+- `REDIS_URL`: conexão com Redis, opcional
+- `JWT_ACCESS_SECRET`: segredo para access token
+- `JWT_REFRESH_SECRET`: segredo para refresh token
+- `JWT_ACCESS_EXPIRES_IN`: expiração do access token
+- `JWT_REFRESH_EXPIRES_IN`: expiração do refresh token
+- `COINGECKO_API_URL`: base URL da CoinGecko
 
-### Prisma
+## Diferenciais implementados
 
-Usei Prisma ORM pela produtividade com TypeScript, clareza na modelagem do banco, facilidade com migrations e boa legibilidade nas operações transacionais.
+- deploy público em Railway, facilitando avaliação sem setup local prévio
+- autenticação completa com `access token` e `refresh token`
+- armazenamento de refresh token com hash
+- criação automática da wallet no cadastro
+- suporte a `BRL`, `BTC`, `ETH` e `USDT`
+- webhook de depósito com idempotência
+- execução de swap com cotação real
+- ledger auditável com saldo antes e depois
+- histórico paginado
+- cache Redis com `TTL` e fallback seguro
+- modelagem separando transação de negócio e lançamento contábil
 
-### Zod
+## 📈 Performance
 
-Usei Zod para validar os payloads na borda da API, garantindo consistência dos dados de entrada e retornos de erro previsíveis.
+Durante os testes, requisições repetidas de cotação dentro da janela de `TTL` foram atendidas com latência muito menor via Redis, enquanto requisições sem cache dependeram diretamente do tempo de resposta da CoinGecko.
 
-### Ledger + saldo materializado
+Essa abordagem melhora a responsividade do endpoint de quote sem comprometer a resiliência da aplicação, já que o sistema continua funcional mesmo sem Redis.
 
-A solução mantém dois níveis de informação:
+## Considerações finais
 
-- `wallet_balances` para leitura rápida do saldo atual
-- `ledger_entries` para auditabilidade completa
+O projeto foi desenhado para demonstrar fundamentos importantes de backend aplicados a um domínio financeiro simplificado: consistência transacional, rastreabilidade, validação de entrada, integração externa, autenticação segura e clareza arquitetural.
 
-Isso permite consultar saldo com eficiência e, ao mesmo tempo, reconstruir o estado da carteira a partir das movimentações.
-
-### Transactions x Ledger
-
-Separei:
-
-- `transactions`: operações de negócio em alto nível (`DEPOSIT`, `SWAP`, `WITHDRAWAL`)
-- `ledger_entries`: movimentações contábeis detalhadas (`SWAP_OUT`, `SWAP_IN`, `SWAP_FEE`, etc.)
-
-Essa distinção melhora a rastreabilidade e a leitura da operação.
-
-### Transações de banco
-
-Operações críticas como cadastro inicial, depósito via webhook, swap e saque utilizam transação do banco com Prisma para garantir consistência entre:
-
-- saldo atualizado
-- `transaction` criada
-- `ledger` registrado
-- idempotência aplicada
-
-### Idempotência no webhook
-
-Depósitos usam `idempotencyKey` para impedir que o mesmo evento externo seja processado duas vezes.
-
-### Refresh token com hash
-
-Os refresh tokens são armazenados com hash no banco, evitando persistência do token puro.
-
-### CoinGecko
-
-A cotação de swap utiliza a CoinGecko API com taxa fixa de `1.5%`, conforme solicitado no teste.
-
-## Estrutura do banco de dados
-
-### `users`
-
-Armazena os usuários da aplicação.
-
-### `wallets`
-
-Cada usuário possui uma wallet em relação `1:1`.
-
-### `wallet_balances`
-
-Armazena o saldo atual por token dentro da wallet.
-
-Exemplo:
-
-- `BRL`
-- `BTC`
-- `ETH`
-- `USDT`
-
-### `transactions`
-
-Registra operações de negócio em alto nível:
-
-- `DEPOSIT`
-- `SWAP`
-- `WITHDRAWAL`
-
-### `ledger_entries`
-
-Registra todas as movimentações detalhadas de saldo:
-
-- `DEPOSIT`
-- `SWAP_OUT`
-- `SWAP_IN`
-- `SWAP_FEE`
-- `WITHDRAWAL`
-
-Cada lançamento registra:
-
-- `token`
-- `amount`
-- `balanceBefore`
-- `balanceAfter`
-- `createdAt`
-
-### `refresh_tokens`
-
-Armazena refresh tokens hasheados, com expiração e revogação.
-
-### `webhook_deposits`
-
-Controla a idempotência dos depósitos via webhook.
-
-## Observações técnicas
-
-- Depósitos via webhook usam `idempotencyKey` para evitar duplicidade.
-- Refresh tokens são armazenados com hash no banco.
-- Operações críticas usam transação do banco com Prisma.
-- O `ledger` registra movimentações detalhadas de saldo.
-- `transactions` registra as operações de negócio em nível mais alto.
-- O swap usa cotação real da CoinGecko e aplica taxa fixa de `1.5%`.
-
-## Estrutura do projeto
-
-- `src/modules`: módulos de domínio da aplicação (`auth`, `wallet`, `webhooks`, `swap`, `withdrawals`, `ledger`, `transactions`)
-- `src/shared`: autenticação, acesso ao banco, tratamento de erros e utilitários compartilhados
-- `prisma/schema.prisma`: modelagem do banco de dados
-- `src/config`: carregamento e validação de variáveis de ambiente
-- `src/app.ts`: criação da instância do Fastify e registro das rotas
-- `src/server.ts`: bootstrap do servidor HTTP
+Além de atender aos requisitos centrais do desafio, a API foi organizada para ser fácil de avaliar tanto pelo código quanto pelo deploy público, permitindo validação rápida do comportamento sem dependência obrigatória de ambiente local.
