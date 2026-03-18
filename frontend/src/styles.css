@@ -1,0 +1,304 @@
+:root {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  color: #14303d;
+  background:
+    radial-gradient(circle at top left, rgba(255, 212, 163, 0.7), transparent 32%),
+    linear-gradient(180deg, #fffdf8 0%, #eef6f8 100%);
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: light;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  border: none;
+  border-radius: 999px;
+  padding: 0.85rem 1.2rem;
+  background: #14303d;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+button:hover {
+  opacity: 0.94;
+  transform: translateY(-1px);
+}
+
+button.secondary-button {
+  background: #d7e7eb;
+  color: #14303d;
+}
+
+input,
+select {
+  width: 100%;
+  border: 1px solid #c8d8dd;
+  border-radius: 14px;
+  padding: 0.8rem 0.95rem;
+  background: #fbfdfe;
+  color: #14303d;
+}
+
+label {
+  display: grid;
+  gap: 0.45rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+code,
+pre {
+  font-family: "Cascadia Code", Consolas, monospace;
+}
+
+.page-shell {
+  width: min(1180px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0 3rem;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 1rem;
+  align-items: stretch;
+  margin-bottom: 1.25rem;
+}
+
+.hero,
+.card {
+  animation: rise 320ms ease both;
+}
+
+.hero-panel,
+.card {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(20, 48, 61, 0.08);
+  border-radius: 24px;
+  box-shadow: 0 18px 45px rgba(20, 48, 61, 0.08);
+}
+
+.hero > div:first-child {
+  padding: 2rem;
+}
+
+.hero-panel {
+  padding: 1.5rem;
+}
+
+.eyebrow,
+.panel-label,
+.result-title {
+  margin: 0 0 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  color: #6a818b;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  line-height: 1.05;
+  max-width: 12ch;
+  margin-bottom: 0.9rem;
+}
+
+h2 {
+  font-size: 1.3rem;
+  margin-bottom: 0.45rem;
+}
+
+.hero-copy,
+.helper-copy,
+.card-copy,
+.placeholder,
+.status-box p,
+.quote-summary p {
+  color: #56707b;
+}
+
+.helper-box {
+  margin-top: 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: 18px;
+  background: #f5fafb;
+  border: 1px solid #dde8eb;
+}
+
+.steps-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.15rem;
+  color: #14303d;
+}
+
+.steps-list li + li {
+  margin-top: 0.2rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  padding: 1.35rem;
+}
+
+.form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.button-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.status-box,
+.balance-list,
+.quote-summary,
+.result-block {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 18px;
+  background: #f5fafb;
+}
+
+.transactions-meta {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  color: #56707b;
+}
+
+.transactions-list {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.transaction-item {
+  padding: 1rem;
+  border-radius: 18px;
+  background: #f5fafb;
+}
+
+.transaction-item p:last-child {
+  margin-bottom: 0;
+}
+
+.balance-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.balance-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #dde8eb;
+}
+
+.balance-item:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.feedback {
+  margin: 1rem 0 0;
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  font-weight: 600;
+}
+
+.feedback.loading {
+  background: #eef3ff;
+  color: #264388;
+}
+
+.feedback.success {
+  background: #eaf8ef;
+  color: #1e6a3b;
+}
+
+.feedback.error {
+  background: #fff0ef;
+  color: #a23a2f;
+}
+
+.result-block pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.85rem;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 900px) {
+  .hero,
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-shell {
+    width: min(100% - 1rem, 100%);
+    padding-top: 1rem;
+  }
+
+  .hero > div:first-child,
+  .hero-panel,
+  .card {
+    padding: 1.1rem;
+  }
+
+  .button-row {
+    flex-direction: column;
+  }
+
+  button {
+    width: 100%;
+  }
+}
